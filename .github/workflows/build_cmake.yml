@@ -5,6 +5,10 @@ on:
     paths-ignore:
       - 'dist/**'
       - 'doc/**'
+  pull_request:
+    paths-ignore:
+      - 'dist/**'
+      - 'doc/**'
 
 env:
   QT_VERSION: 6.8.1
