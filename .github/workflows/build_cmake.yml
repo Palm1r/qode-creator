@@ -129,19 +129,56 @@ jobs:
         if ("${{ runner.os }}" STREQUAL "Windows")
           set(url_os "windows_x86")
           set(compiler_id "win64_msvc2022_64")
+          set(platform_suffix "Windows-Windows_11_23H2-MSVC2022-Windows-Windows_11_23H2-X86_64")
         elseif ("${{ runner.os }}" STREQUAL "Linux")
           set(url_os "linux_x64")
           set(compiler_id "linux_gcc_64")
+          set(platform_suffix "Linux-RHEL_8_10-GCC-Linux-RHEL_8_10-X86_64")
         endif()
         message("Operating system path component: ${url_os}")
         message("Compiler ID: ${compiler_id}")
+        message("Platform suffix: ${platform_suffix}")
 
         set(qt_base_url "https://download.qt.io/online/qtsdkrepository/${url_os}/desktop/qt6_${qt_version_dotless}/qt6_${qt_version_dotless}")
+        set(qt_package_path "qt.qt6.${qt_version_dotless}.${compiler_id}")
         message("Qt base URL: ${qt_base_url}")
+        message("Qt package path: ${qt_package_path}")
         
         file(TO_CMAKE_PATH "$ENV{GITHUB_WORKSPACE}/qt/" qt_dir)
         message("Qt installation directory: ${qt_dir}")
         file(APPEND "$ENV{GITHUB_OUTPUT}" "qt_dir=${qt_dir}")
+
+        # Получаем Updates.xml для извлечения timestamp
+        set(updates_url "${qt_base_url}/Updates.xml")
+        message("Downloading Updates.xml from: ${updates_url}")
+        file(DOWNLOAD "${updates_url}" ./Updates.xml SHOW_PROGRESS STATUS download_status)
+        list(GET download_status 0 status_code)
+        list(GET download_status 1 status_string)
+        if(NOT status_code EQUAL 0)
+          message(FATAL_ERROR "Failed to download Updates.xml: ${status_string}")
+        endif()
+        file(READ ./Updates.xml updates_xml)
+        
+        # Извлекаем timestamp из Updates.xml
+        string(REGEX MATCH "qtbase-([0-9-]+)" timestamp_match "${updates_xml}")
+        if(NOT timestamp_match)
+          message(FATAL_ERROR "Could not find timestamp in Updates.xml")
+        endif()
+        set(timestamp "${CMAKE_MATCH_1}")
+        message("Package timestamp: ${timestamp}")
+
+        foreach(package qtbase qtdeclarative qttools qtsvg qttranslations qtimageformats qtserialport qtquicktimeline qtquick3d qt5compat qtshadertools)
+          set(archive_name "${qt_version}-0-${timestamp}${package}-${platform_suffix}.7z")
+          set(download_url "${qt_base_url}/${qt_package_path}/${archive_name}")
+          
+          message("Downloading ${package}")
+          message("Download URL: ${download_url}")
+          message("Archive name: ${archive_name}")
+          message("Extract directory: ${qt_dir}")
+          
+          file(DOWNLOAD "${download_url}" "${archive_name}" SHOW_PROGRESS)
+          execute_process(COMMAND ${CMAKE_COMMAND} -E tar xvf "${archive_name}" WORKING_DIRECTORY "${qt_dir}")
+        endforeach()
 
         foreach(package qtbase qtdeclarative qttools qtsvg qttranslations qtimageformats qtserialport qtquicktimeline qtquick3d qt5compat qtshadertools)
           set(archive "${package}.7z")
