@@ -47,6 +47,7 @@ jobs:
             os: ubuntu-latest,
             cc: "gcc", cxx: "g++"
           }
+
     steps:
     - uses: actions/checkout@v4
     - name: Checkout submodules
@@ -122,6 +123,8 @@ jobs:
       run: |
         set(qt_version "$ENV{QT_VERSION}")
         string(REPLACE "." "" qt_version_dotless "${qt_version}")
+        message("Qt version: ${qt_version}")
+        message("Qt version without dots: ${qt_version_dotless}")
         
         if ("${{ runner.os }}" STREQUAL "Windows")
           set(url_os "windows_x86")
@@ -130,18 +133,64 @@ jobs:
           set(url_os "linux_x64")
           set(compiler_id "linux_gcc_64")
         endif()
+        message("Operating system path component: ${url_os}")
+        message("Compiler ID: ${compiler_id}")
 
         set(qt_base_url "https://download.qt.io/online/qtsdkrepository/${url_os}/desktop/qt6_${qt_version_dotless}/qt6_${qt_version_dotless}")
+        message("Qt base URL: ${qt_base_url}")
         
         file(TO_CMAKE_PATH "$ENV{GITHUB_WORKSPACE}/qt/" qt_dir)
+        message("Qt installation directory: ${qt_dir}")
         file(APPEND "$ENV{GITHUB_OUTPUT}" "qt_dir=${qt_dir}")
 
         foreach(package qtbase qtdeclarative qttools qtsvg qttranslations qtimageformats qtserialport qtquicktimeline qtquick3d qt5compat qtshadertools)
           set(archive "${package}.7z")
+          set(download_url "${qt_base_url}/${package}")
           message("Downloading ${package}")
-          file(DOWNLOAD "${qt_base_url}/${package}" "${archive}" SHOW_PROGRESS)
+          message("Download URL: ${download_url}")
+          message("Archive name: ${archive}")
+          message("Extract directory: ${qt_dir}")
+          
+          file(DOWNLOAD "${download_url}" "${archive}" SHOW_PROGRESS)
           execute_process(COMMAND ${CMAKE_COMMAND} -E tar xvf "${archive}" WORKING_DIRECTORY "${qt_dir}")
         endforeach()
+
+        # Verify Qt installation
+        message("Verifying Qt installation...")
+        
+        # Check critical directories
+        foreach(dir "bin" "lib" "include" "plugins")
+          if(NOT EXISTS "${qt_dir}/${dir}")
+            message(FATAL_ERROR "Critical Qt directory not found: ${dir}")
+          endif()
+        endforeach()
+
+        # Check critical files
+        if ("${{ runner.os }}" STREQUAL "Windows")
+          set(qmake_exe "${qt_dir}/bin/qmake.exe")
+          set(critical_files 
+              "${qt_dir}/bin/Qt6Core.dll"
+              "${qt_dir}/bin/Qt6Gui.dll"
+              "${qt_dir}/bin/Qt6Widgets.dll")
+        else()
+          set(qmake_exe "${qt_dir}/bin/qmake")
+          set(critical_files
+              "${qt_dir}/lib/libQt6Core.so"
+              "${qt_dir}/lib/libQt6Gui.so"
+              "${qt_dir}/lib/libQt6Widgets.so")
+        endif()
+
+        if(NOT EXISTS "${qmake_exe}")
+          message(FATAL_ERROR "qmake not found at ${qmake_exe}")
+        endif()
+
+        foreach(file ${critical_files})
+          if(NOT EXISTS "${file}")
+            message(FATAL_ERROR "Critical Qt file not found: ${file}")
+          endif()
+        endforeach()
+
+        message("Qt installation verified successfully")
 
     - name: Build
       shell: cmake -P {0}
