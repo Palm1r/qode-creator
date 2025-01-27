@@ -2,10 +2,16 @@ name: CMake Build Matrix
 
 on:
   push:
+    branches:
+      - master
+    tags:
+      - 'v*'
     paths-ignore:
       - 'dist/**'
       - 'doc/**'
   pull_request:
+    branches:
+      - master
     paths-ignore:
       - 'dist/**'
       - 'doc/**'
@@ -41,7 +47,6 @@ jobs:
             os: ubuntu-latest,
             cc: "gcc", cxx: "g++"
           }
-
     steps:
     - uses: actions/checkout@v4
     - name: Checkout submodules
